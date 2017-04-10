@@ -1,15 +1,9 @@
 import java.io.BufferedReader;
 import java.io.FileReader;
-import java.io.FileWriter;
 import java.io.IOException;
-import java.io.InputStreamReader;
-import java.io.PrintStream;
-import java.io.PrintWriter;
 import java.net.MalformedURLException;
 import java.net.URL;
-import java.net.URLConnection;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.TreeMap;
  
@@ -26,7 +20,8 @@ public class ManageData {
 	// This array contains a Data Object for EVERY transaction 
 	ArrayList <Transaction> transactionObjs = new ArrayList<Transaction>();
 	
-	ArrayList <Transaction> predictionObjs = new ArrayList<Transaction>();
+	//Array of projected objects
+	ArrayList <Transaction> projectedObjs = new ArrayList<Transaction>();
 	
 	// Contains transaction totals per month <String, Float> -> <Month, totals>
 	// TreeMap is sorted by Key but not thread safe -- assume we don't care for this
@@ -39,20 +34,27 @@ public class ManageData {
 	// Mounthly data excluding donuts
 	TreeMap<String, MonthlyTotals> monthlyDataND = new TreeMap<String, MonthlyTotals>();
 	
-	// All Credit Card Transactions
+	// Monthly Credit Card Transactions
 	TreeMap<String, MonthlyTotals> ccMonthlyData = new TreeMap<String, MonthlyTotals>();	
 	
 	// this variable holds the 'typcial' month
 	private MonthlyTotals avgMonth;
 	
-	// Predicted overall spending including from checking and credit card
-	private float dollarPrediction;
+	private MonthlyTotals currentProjectedMonthly;
 	
+	// Contains the monthlyData plus the projected Transactions for the current month
+	TreeMap<String, MonthlyTotals> mthDataPlusProjectedData = new TreeMap<String, MonthlyTotals>();
+	
+	// Calculated Projected transactions for the Current Month
+	private MonthlyTotals projectedTransactions;
 	
 	public static final int TRANSACTIONS = 1;
-	public static final int PREDICATIONS = 2;
+	public static final int PROJECTIONS = 2;
+	Util utils = null;
 		
 	void initialize() {
+		
+		utils = new Util();
 		
 		loadData();
 		
@@ -68,14 +70,18 @@ public class ManageData {
 		
 		populateMonthlyTotalsND();
 		
+		loadProjections();
+		
+		parseStrings("predictions.txt",PROJECTIONS);
+		
+		createProjectedObjs();
+		
+		currentMonthlyProjected();
+		
 		selectAvgMonth();
 		
-		getPredictions();
-		
-		parseStrings("predictions.txt",PREDICATIONS);
-		
-		createPredictionObjs();
-		
+		detectAvgMonth();
+			
 	}
 	
 	/**
@@ -83,39 +89,16 @@ public class ManageData {
 	 * Save data to text file
 	 */
 	private void loadData (){
-		URL url = null;
+
 		try {
-			url = new URL("https://2016.api.levelmoney.com/api/v2/core/get-all-transactions");
-			
+			String filename = "data.txt";
 			String query = "{\"args\":{\"uid\":1110590645,\"token\":\"1CCCB6092E87B5552B78ADB68278A5FE\",\"api-token\":\"AppTokenForInterview\",\"json-strict-mode\":false,\"json-verbose-response\":false}}";
+			URL url = new URL("https://2016.api.levelmoney.com/api/v2/core/get-all-transactions");
 			
-			URLConnection connection = url.openConnection();
-			
-			//use post mode
-			connection.setDoOutput(true);
-			connection.setAllowUserInteraction(false);
-			
-			//send query
-	        PrintStream ps = new PrintStream(connection.getOutputStream());
-	        ps.print(query);
-	        ps.close();
-	        
-	        //get result
-	        InputStreamReader isr = new InputStreamReader(connection.getInputStream());
-	        BufferedReader br = new BufferedReader(isr);
-	        PrintWriter out = new PrintWriter(new FileWriter("data.txt"));
-	        String l = null;
-	        while ((l=br.readLine())!=null) {
-	            out.println(l);
-	        }
-	        out.close();
-	        br.close();
-			
+			utils.loadData(url, query, filename);
 		} catch (MalformedURLException e) {
 			e.printStackTrace();
-		} catch (IOException ioe){
-			ioe.printStackTrace();
-		} 
+		}
 		
 	}
 
@@ -125,41 +108,17 @@ public class ManageData {
 	 * This method returns 'no-error' but no data.
 	 * The eval method on the API website did not return any data either.
 	 */
-	private void getPredictions (){
-		URL url = null;
+	private void loadProjections (){
+
 		try {
-			url = new URL("https://2016.api.levelmoney.com/api/v2/core/projected-transactions-for-month");
-			
+			URL url = new URL("https://2016.api.levelmoney.com/api/v2/core/projected-transactions-for-month");
 			String query = "{\"args\":{\"uid\":1110590645,\"token\":\"462FDCDDB86D73FAF7FEC6F95BED9688\",\"api-token\":\"AppTokenForInterview\",\"json-strict-mode\":false,\"json-verbose-response\":false},\"year\":2017,\"month\":4}"; 			
+			String filename = ("predictions.txt");
 			
-			
-			URLConnection connection = url.openConnection();
-			
-			//use post mode
-			connection.setDoOutput(true);
-			connection.setAllowUserInteraction(false);
-			
-			//send query
-	        PrintStream ps = new PrintStream(connection.getOutputStream());
-	        ps.print(query);
-	        ps.close();
-	        
-	        //get result
-	        InputStreamReader isr = new InputStreamReader(connection.getInputStream());
-	        BufferedReader br = new BufferedReader(isr);
-	        PrintWriter out = new PrintWriter(new FileWriter("predictions.txt"));
-	        String l = null;
-	        while ((l=br.readLine())!=null) {
-	            out.println(l);
-	        }
-	        out.close();
-	        br.close();
-			
+			utils.loadData(url, query, filename);			
 		} catch (MalformedURLException e) {
 			e.printStackTrace();
-		} catch (IOException ioe){
-			ioe.printStackTrace();
-		} 
+		}  
 		
 	}
 	
@@ -216,12 +175,12 @@ public class ManageData {
 		}
 	}
 	
-	void createPredictionObjs(){		
+	void createProjectedObjs(){		
 		Transaction data;
 		for ( int i = 0; i < predictionStrings.size(); i++){
 			String str = predictionStrings.get(i);
 			data = new Transaction(str);
-			this.predictionObjs.add(data);
+			this.projectedObjs.add(data);
 		}
 	}
 	
@@ -230,112 +189,76 @@ public class ManageData {
 	 *
 	 */
 	void populateMonthlyTotals (){
-		 java.util.Iterator<Transaction> it = transactionObjs.iterator();
-		 Transaction trans = null;
-		 MonthlyTotals total = null;
-		 
-		 while (it.hasNext()) {
-			 trans =  it.next();
-			 String key = trans.getDate();
-			 total = new MonthlyTotals ( trans.getDate(), trans.getSpent(), trans.getIncome(), trans.getAcctName());
-			 if ( this.monthlyData.containsKey(key)){
-				 //if this month has an entry already
-				 //get that object add the income and spent values
-				 //to this object and put it in the array
-				 MonthlyTotals t = this.monthlyData.get(key);
-				 t.incrementIncome(trans.getIncome());
-				 t.incrementSpent(trans.getSpent());
-				 this.monthlyData.put(key, t);
-			 } else {
-				 this.monthlyData.put(key, total);
-			 }
-		 }
-		
+		this.monthlyData = utils.loadObjects(this.transactionObjs,false, false, false);	
 	}
-	
+	/**
+	 * skip credit card transactions
+	 */
 	void populateMonthlyTotalsNCC (){
-		 java.util.Iterator<Transaction> it = transactionObjs.iterator();
-		 Transaction trans = null;
-		 MonthlyTotals total = null;
-		 
-		 while (it.hasNext()) {
-			 trans =  it.next();
-			 
-			 if (trans.getIsCc()) continue;
-			 
-			 String key = trans.getDate();
-			 total = new MonthlyTotals ( trans.getDate(), trans.getSpent(), trans.getIncome(), trans.getAcctName());
-			 if ( this.monthlyDataNCC.containsKey(key)){
-				 //if this month has an entry already
-				 //get that object add the income and spent values
-				 //to this object and put it in the array
-				 MonthlyTotals t = this.monthlyDataNCC.get(key);
-				 t.incrementIncome(trans.getIncome());
-				 t.incrementSpent(trans.getSpent());
-				 this.monthlyDataNCC.put(key, t);
-			 } else {
-				 this.monthlyDataNCC.put(key, total);
-			 }
-		 }
-		
+		this.monthlyDataNCC = utils.loadObjects(this.transactionObjs,true, false, false);	
 	}
 	
+	/**
+	 * skip donut spending
+	 */
 	void populateMonthlyTotalsND (){
-		 java.util.Iterator<Transaction> it = transactionObjs.iterator();
-		 Transaction trans = null;
-		 MonthlyTotals total = null;
-		 
-		 while (it.hasNext()) {
-			 trans =  it.next();
-			 
-			 if (trans.getIsDonut()) continue;
-			 
-			 String key = trans.getDate();
-			 total = new MonthlyTotals ( trans.getDate(), trans.getSpent(), trans.getIncome(), trans.getAcctName());
-			 if ( this.monthlyDataND.containsKey(key)){
-				 //if this month has an entry already
-				 //get that object add the income and spent values
-				 //to this object and put it in the array
-				 MonthlyTotals t = this.monthlyDataND.get(key);
-				 t.incrementIncome(trans.getIncome());
-				 t.incrementSpent(trans.getSpent());
-				 this.monthlyDataND.put(key, t);
-			 } else {
-				 this.monthlyDataND.put(key, total);
-			 }
-		 }
-		
+		this.monthlyDataND = utils.loadObjects(this.transactionObjs,false, true, false);
 	}
 	
-	
-	
-	
+	/**
+	 * Load ONLY credit card data
+	 */
 	void populateCCMonthlyTotals (){
-		 java.util.Iterator<Transaction> it = transactionObjs.iterator();
+		this.ccMonthlyData = utils.loadObjects(this.transactionObjs,false, false,true);	
+	}
+
+	/**
+	 * find the current month data and add the projected data 
+	 * mthDataPlusProjectedData
+	 * (String date,float spent,float income,String acctName){
+	 */
+
+	 void detectAvgMonth(){
+		 String currentMonth = "2017-04";
+		 MonthlyTotals data1 = null;
+		 MonthlyTotals data2 = null;
+
+		 for (Map.Entry<String, MonthlyTotals> entry : monthlyData.entrySet()) {
+			 data1 = (MonthlyTotals) entry.getValue();
+			 data2 = new MonthlyTotals (data1.getDate(),data1.getSpent(),data1.getIncome(),data1.getAcctName());
+			 this.mthDataPlusProjectedData.put(data1.getDate(), data2);
+		 }
+		 data1 = this.mthDataPlusProjectedData.get(currentMonth);
+		 data1.incrementIncome(this.currentProjectedMonthly.getIncome());
+		 data1.incrementSpent(this.currentProjectedMonthly.getSpent());
+		 this.mthDataPlusProjectedData.put(currentMonth,data1);
+		 this.projectedTransactions = new MonthlyTotals (data1.getDate(),data1.getSpent(),data1.getIncome(),data1.getAcctName());
+
+	 }
+	
+	 /**
+	  * Calculate the monthly total from projected data
+	  * sum all values from API call
+	  */
+	void currentMonthlyProjected (){
+		 java.util.Iterator<Transaction> it = projectedObjs.iterator();
 		 Transaction trans = null;
-		 MonthlyTotals total = null;
+
+		 float income = 0;
+		 float spent = 0;
 		 
 		 while (it.hasNext()) {
 			 trans =  it.next();
-			 
-			 if (trans.getIsCc()) continue;
-			 
-			 String key = trans.getDate();
-			 total = new MonthlyTotals ( trans.getDate(), trans.getSpent(), trans.getIncome(), trans.getAcctName());
-			 if ( this.ccMonthlyData.containsKey(key)){
-				 //if this month has an entry already
-				 //get that object add the income and spent values
-				 //to this object and put it in the array
-				 MonthlyTotals t = this.ccMonthlyData.get(key);
-				 t.incrementIncome(trans.getIncome());
-				 t.incrementSpent(trans.getSpent());
-				 this.ccMonthlyData.put(key, t);
-			 } else {
-				 this.ccMonthlyData.put(key, total);
-			 }
+			 income += trans.getIncome();
+			 spent  += trans.getSpent();			 
 		 }
 		
+		 if (trans != null){
+			 currentProjectedMonthly = new MonthlyTotals (trans.getDate(), spent, income, trans.getAcctName());
+		 }
+		 
 	}
+	
 	
 	void selectAvgMonth(){
 		// calculate the 'average' monthly spending and income values
@@ -396,15 +319,17 @@ public class ManageData {
 		
 		return closestSpentMT;
 	}   		
+    		
 	    		
-	    		
-	
-	void setDollarPrediction (float value){
-		this.dollarPrediction = value;
+	MonthlyTotals getProjectedMonthly(){
+		return this.projectedTransactions;
 	}
 	
-	float getDollarPredicition(){
-		return this.dollarPrediction;
+	ArrayList <Transaction> getTransactionObjs(){
+		return this.transactionObjs;
+	}
+	ArrayList <String> getTransactionStr () {
+		return this.transactionStrings;
 	}
 	
 	/**
@@ -415,7 +340,7 @@ public class ManageData {
 	 void printAllData(boolean skipDonuts, boolean skipCC, int flag) {
 
 		 System.out.println("Entered printAllData flag = "+flag);
-		 java.util.Iterator<Transaction> it = predictionObjs.iterator();
+		 java.util.Iterator<Transaction> it = projectedObjs.iterator();
 		 if (flag == TRANSACTIONS){
 			 it = transactionObjs.iterator();
 		 } 
@@ -442,38 +367,27 @@ public class ManageData {
  
 	 void printCCData(){
 		 System.out.println("     == Monthly Credit Card Transactions ==");
-		 for (Map.Entry<String, MonthlyTotals> entry : ccMonthlyData.entrySet()) {
-			 MonthlyTotals data = (MonthlyTotals) entry.getValue();
-			 System.out.print(" "+data.getDate()+"   Spent $");
-			 System.out.printf("%.2f",data.getSpent());
-			 System.out.print("   Income $");
-			 System.out.printf("%.2f",data.getIncome());
-			 System.out.println();		 
-		 }
+		 utils.printData(this.ccMonthlyData);
+	 }
+	 
+	 void displayMonthlyTotalsNCC(){
+		 System.out.println("== Monthly Expenses and Income (omit credit card transactions) ==");
+		 utils.printData(this.monthlyDataNCC);
 	 }
 	 
 	 void displayMonthlyTotalsND(){
 		 System.out.println("     == Monthly Expenses and Income (omit Donuts) ==");
-		 for (Map.Entry<String, MonthlyTotals> entry : monthlyDataND.entrySet()) {
-			 MonthlyTotals data = (MonthlyTotals) entry.getValue();
-			 System.out.print(" "+data.getDate()+"   Spent $");
-			 System.out.printf("%.2f",data.getSpent());
-			 System.out.print("   Income $");
-			 System.out.printf("%.2f",data.getIncome());
-			 System.out.println();		 
-		 }
+		 utils.printData(this.monthlyDataND);
 	 }
 		
-	 void displayMonthlyTotals(){
+	 void displayMonthlyTotals(){ 
 		 System.out.println("     == Monthly Expenses and Income ==");
-		 for (Map.Entry<String, MonthlyTotals> entry : monthlyData.entrySet()) {
-			 MonthlyTotals data = (MonthlyTotals) entry.getValue();
-			 System.out.print(" "+data.getDate()+"   Spent $");
-			 System.out.printf("%.2f",data.getSpent());
-			 System.out.print("   Income $");
-			 System.out.printf("%.2f",data.getIncome());
-			 System.out.println();		 
-		 }
+		 utils.printData(this.monthlyData);
+	 }
+	 
+	 void displayMonthlyPlusProjected(){ 
+		 System.out.println("     == Monthly Expenses and Income ==");
+		 utils.printData(this.mthDataPlusProjectedData);
 	 }
 
 	 void printRequestedFormat() {

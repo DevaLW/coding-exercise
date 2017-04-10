@@ -12,8 +12,10 @@ public class Transaction {
 	private float spent;
 	private float income;
 	private String acctName;
+	private String merchant;
 	private boolean isDonut;
 	private boolean isCc;
+	
 	
 	
 	public static final String KK_DONUTS = "Krispy Kreme Donuts";
@@ -35,6 +37,7 @@ public class Transaction {
 		String dollarAmt = null;
 		String id = null;
 		String time = null;
+		String merchant = null;
 		for (int i=0; i < elements.length; i++){
 			if (elements[i].contains("amount")){
 				dollarAmt = elements[i];
@@ -42,7 +45,9 @@ public class Transaction {
 				id = elements[i];
 			} else if (elements[i].contains("transaction-time")){
 				time = elements[i];
-			}			
+			} else if (elements[i].contains("raw-merchant")) {
+				merchant = elements[i];
+			}
 		}
 		
 		if (str.contains(KK_DONUTS) || str.contains(DUNKIN)) {
@@ -76,7 +81,11 @@ public class Transaction {
 		text = "\"transaction-time\":\"";
 		s = time.substring(text.length(), text.length()+7);
 		this.date = s;
-	
+		
+		text = "\"raw-merchant\":\"";
+		//System.out.println(merchant);
+		s = merchant.substring(text.length(), merchant.lastIndexOf("\""));
+		this.merchant = s;
 	}
 	
 
@@ -137,6 +146,13 @@ public class Transaction {
 	}
 	boolean getIsCc(){
 		return isCc;
+	}
+	
+	void setMerchant(String value){
+		this.merchant = value;
+	}
+	String getMerchant(){
+		return this.merchant;
 	}
 	
 	void printRequestedFormat(boolean first){

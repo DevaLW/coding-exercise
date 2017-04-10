@@ -1,13 +1,4 @@
-import java.io.BufferedReader;
-import java.io.FileWriter;
-import java.io.IOException;
-import java.io.InputStreamReader;
-import java.io.PrintStream;
-import java.io.PrintWriter;
-import java.net.MalformedURLException;
-import java.net.URL;
-import java.net.URLConnection;
-import java.util.ArrayList;
+
 
 public class ExecuteCmds{
 	  
@@ -25,9 +16,9 @@ public class ExecuteCmds{
 
 	}
 	
-	float getPredictedSpending(){
-		manageData.printAllData(false,false,ManageData.PREDICATIONS);
-		return 0;
+	void getProjectedMonthlyData(){
+		MonthlyTotals mt = manageData.getProjectedMonthly();
+		mt.printRequestedFormat(true);
 	}
 	
 	/**
@@ -39,6 +30,13 @@ public class ExecuteCmds{
 	**/
 	void displayMonthlyData (){
 		manageData.displayMonthlyTotals();
+	}
+	
+	/**
+	 * Display monthly transactions Excluding Donuts
+	 */
+	void displayMthlyDataNCC (){
+		manageData.displayMonthlyTotalsNCC();
 	}
 	
 
@@ -95,19 +93,15 @@ public class ExecuteCmds{
 		System.out.println();
 		
 		System.out.println("	--ignore-cc-payments |  -icc");
-		System.out.println("	Display data for cash only transactions - omit credit card transactions");
+		System.out.println("	Display monthly data for cash only transactions - omit credit card transactions");
 		System.out.println();
-		
-		System.out.println("	--display-user-data |  -dud");
-		System.out.println("	Display all user data each transaction listed separately.");
-		System.out.println();
-		
-		//System.out.println("	--display-summary-data |  -dsd"); TODO Delete?
-		//System.out.println("	Display sum total for each account");
-		//System.out.println();
-				
+					
 		System.out.println("	--crystal-ball |  -cb");
-		System.out.println("	Display predict spending for current month");
+		System.out.println("	Display projected for current month");
+		System.out.println();
+
+		System.out.println("	--display-user-data |  -dud");
+		System.out.println("	Display ALL user data EACH transaction listed separately.");
 		System.out.println();
 		
 		System.out.println("	--help |  -h");
