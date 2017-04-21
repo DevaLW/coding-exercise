@@ -1,4 +1,0 @@
-
-
-java -cp .\bin HandleQueries
-
